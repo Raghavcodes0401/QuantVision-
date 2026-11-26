@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuantVision — Next-Day Market Forecasting</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 15% 15%, #0f172a 0%, #030712 100%);
+      min-height: 100vh;
+      color: #e2e8f0;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+    .glow-green {
+      box-shadow: 0 0 35px -5px rgba(16, 185, 129, 0.25);
+    }
+    .glow-red {
+      box-shadow: 0 0 35px -5px rgba(239, 68, 68, 0.25);
+    }
+    .slider-thumb::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      box-shadow: 0 0 10px #38bdf8;
+    }
+  </style>
+</head>
+<body class="p-4 md:p-8 flex flex-col justify-between">
+  <div class="max-w-6xl mx-auto w-full space-y-6">
+
+    <!-- Top Navigation & Branding -->
+    <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-slate-800 gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+            QuantVision
+            <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-cyan-950/80 text-cyan-400 border border-cyan-800/60">
+              Live Forecast
+            </span>
+          </h1>
+          <p class="text-xs text-slate-400 font-medium">Quantitative Next-Day Index Direction & Closing Price Predictor</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 text-xs text-slate-400 bg-slate-900/60 px-3.5 py-2 rounded-xl border border-slate-800">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>Market Settlement: <strong class="text-slate-200 mono">{{ summary.latest_date }}</strong></span>
+        <span class="text-slate-600">•</span>
+        <span>Base: <strong class="text-slate-200 mono">₹{{ "{:,.2f}".format(summary.latest_close) }}</strong></span>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: Input & Market Context -->
+      <div class="lg:col-span-5 space-y-6">
+
+        <!-- Input Card -->
+        <div class="glass-card rounded-2xl p-6 relative overflow-hidden">
+          <div class="absolute -top-12 -right-12 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div class="flex items-center justify-between mb-4">
+            <label for="closeInput" class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Last Day Closing Price (₹)
+            </label>
+            <span class="text-xs text-slate-400">Index Points</span>
+          </div>
+
+          <div class="relative mb-4">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg font-semibold mono">₹</span>
+            <input
+              type="number"
+              id="closeInput"
+              step="0.05"
+              value="{{ initial.input_close }}"
+              class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl py-3.5 pl-9 pr-4 text-white text-xl font-bold mono focus:outline-none focus:ring-2 focus:ring-cyan-500/60 focus:border-cyan-500 transition shadow-inner"
+              placeholder="e.g. 22811.35"
+            >
+          </div>
+
+          <!-- Quick Action Presets -->
+          <div class="flex flex-wrap items-center gap-2 mb-6">
+            <span class="text-xs text-slate-400 mr-1">Presets:</span>
+            <button onclick="setPrice({{ summary.latest_close }})" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+              Latest (₹{{ "{:,.2f}".format(summary.latest_close) }})
+            </button>
+            <button onclick="adjustPrice(100)" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+              +100 pts
+            </button>
+            <button onclick="adjustPrice(-100)" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+              -100 pts
+            </button>
+          </div>
+
+          <!-- Submit Button -->
+          <button
+            id="predictBtn"
+            onclick="triggerPrediction()"
+            class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 active:scale-[0.99] transition"
+          >
+            <svg id="btnIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+            <span id="btnText">Analyze & Predict Next Day</span>
+          </button>
+        </div>
+
+        <!-- Historic Market Context Card (Abstracted, high-level user friendly) -->
+        <div class="glass-card rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Historical Range & Context</h3>
+            <span class="text-xs text-slate-400 font-medium">1-Year Baseline</span>
+          </div>
+
+          <!-- 52-Week Range Bar -->
+          <div>
+            <div class="flex justify-between text-xs text-slate-400 mb-1.5 mono">
+              <span>Low: ₹{{ "{:,.2f}".format(summary.low_52w) }}</span>
+              <span>High: ₹{{ "{:,.2f}".format(summary.high_52w) }}</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-700/60">
+              <div id="rangeBar" class="bg-gradient-to-r from-emerald-500 via-cyan-400 to-indigo-500 h-full rounded-full transition-all duration-500" style="width: {{ initial.pos_52 }}%;"></div>
+            </div>
+            <p id="rangeText" class="text-right text-[11px] text-cyan-400 mt-1 font-medium">
+              Trading at {{ initial.pos_52 }}% of 52-week band
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-2">
+            <div class="bg-slate-900/70 p-3 rounded-xl border border-slate-800">
+              <div class="text-[11px] text-slate-400">Avg. Daily Movement</div>
+              <div class="text-base font-bold text-slate-200 mono mt-0.5">±{{ summary.avg_daily_change_points }} pts</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">~{{ summary.avg_daily_change_pct }}% per session</div>
+            </div>
+            <div class="bg-slate-900/70 p-3 rounded-xl border border-slate-800">
+              <div class="text-[11px] text-slate-400">Market Volatility</div>
+              <div class="text-base font-bold text-emerald-400 mono mt-0.5">Normal ({{ summary.annualized_volatility_pct }}%)</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Stable market regime</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Forecast Results & Intuitive Visuals -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- Top Dual-Prediction Banner -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <!-- Market Direction Card (Logistic Regression result) -->
+          <div id="dirCard" class="glass-card rounded-2xl p-5 border transition-all duration-300 {{ 'border-emerald-500/40 glow-green' if initial.direction == 'UP' else 'border-red-500/40 glow-red' }}">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Next Day Market Direction</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800/80 text-slate-300">Logistic Model</span>
+            </div>
+
+            <div class="flex items-center space-x-3 my-2">
+              <div id="dirIconWrapper" class="w-12 h-12 rounded-xl flex items-center justify-center {{ 'bg-emerald-500/20 text-emerald-400' if initial.direction == 'UP' else 'bg-red-500/20 text-red-400' }}">
+                <svg id="dirIcon" class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {% if initial.direction == 'UP' %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  {% else %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                  {% endif %}
+                </svg>
+              </div>
+              <div>
+                <div id="dirLabel" class="text-2xl font-black tracking-tight {{ 'text-emerald-400' if initial.direction == 'UP' else 'text-red-400' }}">
+                  {{ initial.direction_label }}
+                </div>
+                <div class="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+                  Directional Probability:
+                  <span id="confidenceVal" class="text-white font-bold mono">{{ initial.confidence }}%</span>
+                </div>
+              </div>
+            </div>
+
+            <p id="dirSummary" class="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-800/80 leading-relaxed">
+              {% if initial.direction == 'UP' %}
+                Historical patterns show a prevailing momentum favored toward positive gains for the next session.
+              {% else %}
+                Momentum indicators and return ratios reflect caution with downward consolidation expected.
+              {% endif %}
+            </p>
+          </div>
+
+          <!-- Expected Closing Price Card (Linear Regression result) -->
+          <div class="glass-card rounded-2xl p-5 border border-cyan-500/30">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Expected Next Close</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800/80 text-cyan-300">Linear Model</span>
+            </div>
+
+            <div class="my-2">
+              <div id="predPrice" class="text-3xl font-extrabold text-white tracking-tight mono">
+                ₹{{ "{:,.2f}".format(initial.predicted_close) }}
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <span id="changeBadge" class="text-xs font-bold px-2 py-0.5 rounded-md mono {{ 'bg-emerald-500/20 text-emerald-300' if initial.change_pts >= 0 else 'bg-red-500/20 text-red-300' }}">
+                  {{ "+{:,.2f}".format(initial.change_pts) if initial.change_pts >= 0 else "{:,.2f}".format(initial.change_pts) }} pts
+                </span>
+                <span id="changePct" class="text-xs font-medium mono {{ 'text-emerald-400' if initial.change_pct >= 0 else 'text-red-400' }}">
+                  ({{ "+{:.2f}%".format(initial.change_pct) if initial.change_pct >= 0 else "{:.2f}%".format(initial.change_pct) }})
+                </span>
+              </div>
+            </div>
+
+            <div class="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center">
+              <span>Expected Corridor:</span>
+              <span id="corridorRange" class="mono text-slate-300 font-semibold">
+                ₹{{ "{:,.2f}".format(initial.corridor_low) }} – ₹{{ "{:,.2f}".format(initial.corridor_high) }}
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Interactive Chart: Recent Historical Trend + Forecast -->
+        <div class="glass-card rounded-2xl p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                <span>Recent Price Trend & Forecast Node</span>
+                <span class="inline-block w-2 h-2 rounded-full bg-cyan-400"></span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">Abstracted clean view showing the trajectory into tomorrow's predicted close</p>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="flex items-center gap-1.5 text-slate-300">
+                <span class="w-3 h-0.5 bg-cyan-400 inline-block"></span> History
+              </span>
+              <span class="flex items-center gap-1.5 text-amber-400 font-medium">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block ring-2 ring-amber-400/30"></span> Next Close
+              </span>
+            </div>
+          </div>
+
+          <div class="h-64 w-full">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Executive Footer Note -->
+    <footer class="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+      <div class="flex items-center gap-2">
+        <span>QuantVision Intelligent Market Engine</span>
+        <span>•</span>
+        <span class="text-slate-400">Machine learning models: Logistic & Linear Regression</span>
+      </div>
+      <div>
+        <span>All complex loss functions and diagnostic metrics are abstracted for executive simplicity.</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Client-Side Prediction & Chart Script -->
+  <script>
+    let chartInstance = null;
+    const initialData = {{ initial | tojson }};
+
+    function initChart(dates, prices) {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      const pointColors = prices.map((_, index) => {
+        if (index === prices.length - 1) return '#f59e0b'; // forecast node
+        if (index === prices.length - 2) return '#38bdf8'; // user input node
+        return '#0284c7';
+      });
+
+      const pointRadii = prices.map((_, index) => {
+        if (index >= prices.length - 2) return 6;
+        return 2.5;
+      });
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Index Closing Value (₹)',
+            data: prices,
+            borderColor: '#38bdf8',
+            borderWidth: 2.2,
+            backgroundColor: 'rgba(56, 189, 248, 0.08)',
+            fill: true,
+            tension: 0.28,
+            pointBackgroundColor: pointColors,
+            pointBorderColor: '#0f172a',
+            pointBorderWidth: 1.5,
+            pointRadius: pointRadii,
+            pointHoverRadius: 7,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              titleColor: '#e2e8f0',
+              bodyColor: '#38bdf8',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              borderWidth: 1,
+              padding: 10,
+              displayColors: false,
+              callbacks: {
+                label: function(context) {
+                  const val = context.parsed.y;
+                  const idx = context.dataIndex;
+                  const total = context.dataset.data.length;
+                  if (idx === total - 1) {
+                    return 'Forecast Next Day: ₹' + val.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                  } else if (idx === total - 2) {
+                    return 'Input Last Close: ₹' + val.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                  }
+                  return 'Historical Close: ₹' + val.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.03)' },
+              ticks: { color: '#64748b', maxRotation: 35, font: { size: 10 } }
+            },
+            y: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: {
+                color: '#64748b',
+                font: { size: 10, family: 'JetBrains Mono' },
+                callback: function(value) {
+                  return '₹' + value.toLocaleString('en-IN');
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Set preset price into input and trigger
+    function setPrice(val) {
+      document.getElementById('closeInput').value = val.toFixed(2);
+      triggerPrediction();
+    }
+
+    // Adjust current value by delta
+    function adjustPrice(delta) {
+      const input = document.getElementById('closeInput');
+      let curr = parseFloat(input.value) || 22811.35;
+      curr += delta;
+      input.value = curr.toFixed(2);
+      triggerPrediction();
+    }
+
+    async function triggerPrediction() {
+      const inputElem = document.getElementById('closeInput');
+      const val = parseFloat(inputElem.value);
+      if (isNaN(val) || val <= 0) {
+        alert('Please enter a valid positive closing price.');
+        return;
+      }
+
+      const btn = document.getElementById('predictBtn');
+      const btnText = document.getElementById('btnText');
+      btnText.innerText = 'Analyzing Patterns...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ close: val })
+        });
+        const result = await res.json();
+        if (result.success) {
+          updateUI(result.data);
+        } else {
+          alert('Prediction failed: ' + result.error);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        btnText.innerText = 'Analyze & Predict Next Day';
+        btn.disabled = false;
+      }
+    }
+
+    function updateUI(d) {
+      // Direction card update
+      const isUp = d.direction === 'UP';
+      const dirCard = document.getElementById('dirCard');
+      const dirLabel = document.getElementById('dirLabel');
+      const dirIcon = document.getElementById('dirIcon');
+      const dirIconWrapper = document.getElementById('dirIconWrapper');
+      const confidenceVal = document.getElementById('confidenceVal');
+      const dirSummary = document.getElementById('dirSummary');
+
+      if (isUp) {
+        dirCard.className = 'glass-card rounded-2xl p-5 border border-emerald-500/40 glow-green transition-all duration-300';
+        dirLabel.className = 'text-2xl font-black tracking-tight text-emerald-400';
+        dirIconWrapper.className = 'w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-500/20 text-emerald-400';
+        dirIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />';
+        dirSummary.innerText = 'Historical patterns show a prevailing momentum favored toward positive gains for the next session.';
+      } else {
+        dirCard.className = 'glass-card rounded-2xl p-5 border border-red-500/40 glow-red transition-all duration-300';
+        dirLabel.className = 'text-2xl font-black tracking-tight text-red-400';
+        dirIconWrapper.className = 'w-12 h-12 rounded-xl flex items-center justify-center bg-red-500/20 text-red-400';
+        dirIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />';
+        dirSummary.innerText = 'Momentum indicators and return ratios reflect caution with downward consolidation expected.';
+      }
+
+      dirLabel.innerText = d.direction_label;
+      confidenceVal.innerText = d.confidence + '%';
+
+      // Price card update
+      document.getElementById('predPrice').innerText = '₹' + d.predicted_close.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
+      const changeSign = d.change_pts >= 0 ? '+' : '';
+      const changeBadge = document.getElementById('changeBadge');
+      changeBadge.innerText = changeSign + d.change_pts.toFixed(2) + ' pts';
+      changeBadge.className = 'text-xs font-bold px-2 py-0.5 rounded-md mono ' + (d.change_pts >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300');
+
+      const changePct = document.getElementById('changePct');
+      changePct.innerText = '(' + changeSign + d.change_pct.toFixed(2) + '%)';
+      changePct.className = 'text-xs font-medium mono ' + (d.change_pct >= 0 ? 'text-emerald-400' : 'text-red-400');
+
+      document.getElementById('corridorRange').innerText = '₹' + d.corridor_low.toLocaleString('en-IN', { minimumFractionDigits: 2 }) + ' – ₹' + d.corridor_high.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+      // Range bar
+      document.getElementById('rangeBar').style.width = d.pos_52 + '%';
+      document.getElementById('rangeText').innerText = 'Trading at ' + d.pos_52 + '% of 52-week band';
+
+      // Chart update
+      initChart(d.chart_dates, d.chart_prices);
+    }
+
+    // Auto-initialize chart on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart(initialData.chart_dates, initialData.chart_prices);
+    });
+  </script>
+</body>
+</html>
